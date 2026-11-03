@@ -97,26 +97,36 @@ def split_tiles(canvas: Image.Image, gap: tuple[int, int]) -> list[Image.Image]:
 
 
 def render_clock(now: _dt.datetime, colon_on: bool, cfg: ClockConfig) -> Image.Image:
-    """Full-screen clock: HH:MM across the top two key rows, date on the bottom row."""
+    """Full-screen clock: HH:MM stretched to fill the key grid (date on the bottom row if enabled)."""
     size = canvas_size(cfg.gap)
     gx, gy = cfg.gap
     canvas = Image.new("RGB", size, cfg.bg)
-    draw = ImageDraw.Draw(canvas)
-
     time_text = now.strftime("%H:%M")
-    font = _fit_font(draw, "88:88", size[0] - 16, start=140, floor=40)
-    bbox = draw.textbbox((0, 0), "88:88", font=font)
-    text_h = bbox[3] - bbox[1]
-    area_h = KEY_SIZE[1] * 2 + gy if cfg.show_date else size[1]
-    y = (area_h - text_h) / 2 - bbox[1]
-    # Draw digits and colon separately so the colon can blink without shifting digits.
-    x = (size[0] - draw.textlength(time_text, font=font)) / 2
+
+    # Render the time at a fixed large size, crop to the geometry of "88:88" so the
+    # digits never shift when the colon blinks, then resize to the target area.
+    # Aspect ratio is not preserved: the digits stretch to fill the whole grid.
+    font = _font(200)
+    probe = ImageDraw.Draw(Image.new("L", (1, 1)))
+    bbox = probe.textbbox((0, 0), "88:88", font=font)
+    text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    layer = Image.new("RGBA", (text_w, text_h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    x = -bbox[0]
     for ch in time_text:
         if ch != ":" or colon_on:
-            draw.text((x, y), ch, font=font, fill=cfg.fg)
+            draw.text((x, -bbox[1]), ch, font=font, fill=cfg.fg)
         x += draw.textlength(ch, font=font)
 
+    margin = 6
+    time_rows = 2 if cfg.show_date else GRID_ROWS
+    area_h = time_rows * KEY_SIZE[1] + (time_rows - 1) * gy
+    target = (size[0] - 2 * margin, area_h - 2 * margin)
+    layer = layer.resize(target, Image.LANCZOS)
+    canvas.paste(layer, (margin, margin), layer)
+
     if cfg.show_date:
+        draw = ImageDraw.Draw(canvas)
         date_text = now.strftime("%Y-%m-%d  %a")
         dfont = _fit_font(draw, date_text, size[0] - 24, start=34, floor=14)
         w = draw.textlength(date_text, font=dfont)
