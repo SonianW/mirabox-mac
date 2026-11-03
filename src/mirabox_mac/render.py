@@ -97,36 +97,51 @@ def split_tiles(canvas: Image.Image, gap: tuple[int, int]) -> list[Image.Image]:
 
 
 def render_clock(now: _dt.datetime, colon_on: bool, cfg: ClockConfig) -> Image.Image:
-    """Full-screen clock: HH:MM stretched to fill the key grid (date on the bottom row if enabled)."""
+    """Full-screen clock: HH:MM in a fixed layout filling the key grid.
+
+    The colon sits exactly on the horizontal centre of the grid, i.e. the middle
+    of the middle key column; each digit has its own equal-width slot on either
+    side, so nothing moves when the digits or the colon change. Glyphs are
+    scaled independently in x and y to fill the available height.
+    """
     size = canvas_size(cfg.gap)
     gx, gy = cfg.gap
     canvas = Image.new("RGB", size, cfg.bg)
     time_text = now.strftime("%H:%M")
 
-    # Render the time at a fixed large size, crop to the geometry of "88:88" so the
-    # digits never shift when the colon blinks, then resize to the target area.
-    # Aspect ratio is not preserved: the digits stretch to fill the whole grid.
     font = _font(200)
     probe = ImageDraw.Draw(Image.new("L", (1, 1)))
-    bbox = probe.textbbox((0, 0), "88:88", font=font)
-    text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    layer = Image.new("RGBA", (text_w, text_h), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(layer)
-    # Centre the actual string inside the "88:88" box: narrow digits such as "1"
-    # would otherwise leave the time hugging the left edge.
-    actual_w = draw.textlength(time_text, font=font)
-    x = -bbox[0] + (text_w - actual_w) / 2
-    for ch in time_text:
-        if ch != ":" or colon_on:
-            draw.text((x, -bbox[1]), ch, font=font, fill=cfg.fg)
-        x += draw.textlength(ch, font=font)
+    bbox = probe.textbbox((0, 0), "0123456789", font=font)
+    glyph_h = bbox[3] - bbox[1]
+    digit_adv = max(probe.textlength(d, font=font) for d in "0123456789")
+    colon_adv = probe.textlength(":", font=font)
 
     margin = 6
     time_rows = 2 if cfg.show_date else GRID_ROWS
     area_h = time_rows * KEY_SIZE[1] + (time_rows - 1) * gy
-    target = (size[0] - 2 * margin, area_h - 2 * margin)
-    layer = layer.resize(target, Image.LANCZOS)
-    canvas.paste(layer, (margin, margin), layer)
+    target_h = area_h - 2 * margin
+    sy = target_h / glyph_h
+    # 4 digit slots + 1 colon slot share the width; colon keeps its natural proportion.
+    units = 4 * digit_adv + colon_adv
+    sx = (size[0] - 2 * margin) / units
+    slot_w = digit_adv * sx
+    colon_w = colon_adv * sx
+    cx = size[0] / 2
+
+    def glyph(ch: str) -> Image.Image:
+        adv = probe.textlength(ch, font=font)
+        layer = Image.new("RGBA", (int(adv) + 2, glyph_h), (0, 0, 0, 0))
+        ImageDraw.Draw(layer).text((0, -bbox[1]), ch, font=font, fill=cfg.fg)
+        return layer.resize((max(1, int(adv * sx)), target_h), Image.LANCZOS)
+
+    # slot centres, left to right: d d : d d
+    centres = [cx - colon_w / 2 - slot_w * 1.5, cx - colon_w / 2 - slot_w * 0.5, cx,
+               cx + colon_w / 2 + slot_w * 0.5, cx + colon_w / 2 + slot_w * 1.5]
+    for ch, c in zip(time_text, centres):
+        if ch == ":" and not colon_on:
+            continue
+        g = glyph(ch)
+        canvas.paste(g, (int(c - g.width / 2), margin), g)
 
     if cfg.show_date:
         draw = ImageDraw.Draw(canvas)
