@@ -1,0 +1,28 @@
+[project]
+name = "mirabox-mac"
+version = "0.1.0"
+description = "Drive a Mirabox Stream Dock M18 on macOS from a JSON key map"
+readme = "README.md"
+authors = [
+    { name = "jiaqiang.wang", email = "jiaqiang.wang@anuttacon.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "pillow>=13.0.0",
+    "streamdock",
+]
+
+[project.scripts]
+mirabox-mac = "mirabox_mac:main"
+
+[build-system]
+requires = ["uv_build>=0.11.19,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.uv.workspace]
+members = [
+    "vendor/StreamDock-Device-SDK/Python-SDK",
+]
+
+[tool.uv.sources]
+streamdock = { workspace = true, editable = true }
