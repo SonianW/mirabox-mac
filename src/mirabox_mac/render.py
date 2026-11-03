@@ -77,32 +77,40 @@ def blank_key(bg: str = "#000000") -> Image.Image:
 
 
 GRID_COLS, GRID_ROWS = 5, 3
-CANVAS = (GRID_COLS * KEY_SIZE[0], GRID_ROWS * KEY_SIZE[1])  # 320 x 192
 
 
-def split_tiles(canvas: Image.Image) -> list[Image.Image]:
-    """Cut a 320x192 canvas into 15 key tiles, ordered key 1..15."""
+def canvas_size(gap: tuple[int, int]) -> tuple[int, int]:
+    """Virtual canvas covering the 5x3 key grid plus the physical gaps between keys."""
+    gx, gy = gap
+    return (GRID_COLS * KEY_SIZE[0] + (GRID_COLS - 1) * gx, GRID_ROWS * KEY_SIZE[1] + (GRID_ROWS - 1) * gy)
+
+
+def split_tiles(canvas: Image.Image, gap: tuple[int, int]) -> list[Image.Image]:
+    """Cut the canvas into 15 key tiles at the keys' physical positions, ordered key 1..15."""
+    gx, gy = gap
     tiles = []
     for n in range(GRID_COLS * GRID_ROWS):
         c, r = n % GRID_COLS, n // GRID_COLS
-        x, y = c * KEY_SIZE[0], r * KEY_SIZE[1]
+        x, y = c * (KEY_SIZE[0] + gx), r * (KEY_SIZE[1] + gy)
         tiles.append(canvas.crop((x, y, x + KEY_SIZE[0], y + KEY_SIZE[1])))
     return tiles
 
 
 def render_clock(now: _dt.datetime, colon_on: bool, cfg: ClockConfig) -> Image.Image:
     """Full-screen clock: HH:MM across the top two key rows, date on the bottom row."""
-    canvas = Image.new("RGB", CANVAS, cfg.bg)
+    size = canvas_size(cfg.gap)
+    gx, gy = cfg.gap
+    canvas = Image.new("RGB", size, cfg.bg)
     draw = ImageDraw.Draw(canvas)
 
     time_text = now.strftime("%H:%M")
-    font = _fit_font(draw, "88:88", CANVAS[0] - 16, start=120, floor=40)
+    font = _fit_font(draw, "88:88", size[0] - 16, start=140, floor=40)
     bbox = draw.textbbox((0, 0), "88:88", font=font)
     text_h = bbox[3] - bbox[1]
-    area_h = KEY_SIZE[1] * 2 if cfg.show_date else CANVAS[1]
+    area_h = KEY_SIZE[1] * 2 + gy if cfg.show_date else size[1]
     y = (area_h - text_h) / 2 - bbox[1]
     # Draw digits and colon separately so the colon can blink without shifting digits.
-    x = (CANVAS[0] - draw.textlength(time_text, font=font)) / 2
+    x = (size[0] - draw.textlength(time_text, font=font)) / 2
     for ch in time_text:
         if ch != ":" or colon_on:
             draw.text((x, y), ch, font=font, fill=cfg.fg)
@@ -110,10 +118,11 @@ def render_clock(now: _dt.datetime, colon_on: bool, cfg: ClockConfig) -> Image.I
 
     if cfg.show_date:
         date_text = now.strftime("%Y-%m-%d  %a")
-        dfont = _fit_font(draw, date_text, CANVAS[0] - 24, start=30, floor=14)
+        dfont = _fit_font(draw, date_text, size[0] - 24, start=34, floor=14)
         w = draw.textlength(date_text, font=dfont)
         dbbox = draw.textbbox((0, 0), date_text, font=dfont)
         dh = dbbox[3] - dbbox[1]
-        dy = KEY_SIZE[1] * 2 + (KEY_SIZE[1] - dh) / 2 - dbbox[1]
-        draw.text(((CANVAS[0] - w) / 2, dy), date_text, font=dfont, fill=cfg.date_fg)
+        row_top = 2 * (KEY_SIZE[1] + gy)
+        dy = row_top + (KEY_SIZE[1] - dh) / 2 - dbbox[1]
+        draw.text(((size[0] - w) / 2, dy), date_text, font=dfont, fill=cfg.date_fg)
     return canvas

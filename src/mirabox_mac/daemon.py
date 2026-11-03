@@ -112,12 +112,12 @@ class Deck:
                     log.info("idle for %ds, showing clock", cfg.idle_seconds)
                 now = dt.datetime.now()
                 colon_on = (now.second % 2 == 0) if cfg.blink else True
-                frame = (now.hour, now.minute, colon_on, now.day)
+                frame = (now.hour, now.minute, colon_on, now.day, cfg.gap, cfg.show_date, cfg.fg, cfg.bg)
                 if frame == last_frame:
                     continue
                 last_frame = frame
                 try:
-                    self._send_tiles(dev, split_tiles(render_clock(now, colon_on, cfg)))
+                    self._send_tiles(dev, split_tiles(render_clock(now, colon_on, cfg), cfg.gap))
                 except Exception:
                     log.exception("clock frame failed")
 

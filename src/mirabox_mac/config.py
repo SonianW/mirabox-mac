@@ -74,11 +74,12 @@ class Page:
 @dataclass
 class ClockConfig:
     idle_seconds: int = 30  # 0 disables the idle clock
-    show_date: bool = True
+    show_date: bool = False
     bg: str = "#000000"
     fg: str = "#ffffff"
     date_fg: str = "#9a9a9a"
     blink: bool = True
+    gap: tuple[int, int] = (16, 16)  # physical gap between keys, in key pixels (key = 64 px)
 
 
 @dataclass
@@ -194,12 +195,15 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> Config:
         raise ConfigError("'clock' must be an object")
     clock = ClockConfig(
         idle_seconds=int(clock_raw.get("idle_seconds", 30)),
-        show_date=bool(clock_raw.get("show_date", True)),
+        show_date=bool(clock_raw.get("show_date", False)),
         bg=str(clock_raw.get("bg", "#000000")),
         fg=str(clock_raw.get("fg", "#ffffff")),
         date_fg=str(clock_raw.get("date_fg", "#9a9a9a")),
         blink=bool(clock_raw.get("blink", True)),
+        gap=tuple(int(g) for g in clock_raw.get("gap", [16, 16])),  # type: ignore[arg-type]
     )
+    if len(clock.gap) != 2 or min(clock.gap) < 0:
+        raise ConfigError("clock.gap must be [horizontal, vertical] pixels >= 0")
     if clock.idle_seconds < 0:
         raise ConfigError("clock.idle_seconds must be >= 0")
 

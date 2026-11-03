@@ -61,8 +61,20 @@ def cmd_preview(args) -> int:
 
         from .render import render_clock
 
-        path = out / "clock.png"
-        render_clock(dt.datetime.now(), True, cfg.clock).save(path)
+        from .render import split_tiles
+
+        canvas = render_clock(dt.datetime.now(), True, cfg.clock)
+        path = out / "clock-canvas.png"
+        canvas.save(path)
+        print(path)
+        # What the keys actually show: tiles laid out with the configured gaps.
+        gx, gy = cfg.clock.gap
+        sheet = Image.new("RGB", canvas.size, "#303030")
+        for n, tile in enumerate(split_tiles(canvas, cfg.clock.gap)):
+            c, r = n % cols, n // cols
+            sheet.paste(tile, (c * (KEY_SIZE[0] + gx), r * (KEY_SIZE[1] + gy)))
+        path = out / "clock-keys.png"
+        sheet.save(path)
         print(path)
     return 0
 
