@@ -112,7 +112,10 @@ def render_clock(now: _dt.datetime, colon_on: bool, cfg: ClockConfig) -> Image.I
     text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
     layer = Image.new("RGBA", (text_w, text_h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(layer)
-    x = -bbox[0]
+    # Centre the actual string inside the "88:88" box: narrow digits such as "1"
+    # would otherwise leave the time hugging the left edge.
+    actual_w = draw.textlength(time_text, font=font)
+    x = -bbox[0] + (text_w - actual_w) / 2
     for ch in time_text:
         if ch != ":" or colon_on:
             draw.text((x, -bbox[1]), ch, font=font, fill=cfg.fg)
