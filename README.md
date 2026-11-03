@@ -48,6 +48,7 @@ Default path `~/.config/mirabox-mac/config.json`, override with `-c` or
   "brightness": 80,
   "led": [0, 0, 0],
   "default_page": "main",
+  "clock": {"idle_seconds": 30, "show_date": true, "blink": true},
   "pages": {
     "main": {
       "keys": {
@@ -66,6 +67,7 @@ Default path `~/.config/mirabox-mac/config.json`, override with `-c` or
 | Field | Meaning |
 | --- | --- |
 | `brightness` | Screen brightness 0-100 |
+| `clock` | Idle clock: after `idle_seconds` without a key press the 15 LCD keys show one full-screen clock (HH:MM, colon blinking each second, date below). The next press only wakes the page. `idle_seconds: 0` disables it. Fields: `idle_seconds`, `show_date`, `blink`, `bg`, `fg`, `date_fg`. The device background image is never touched. |
 | `led` | `[r, g, b]` for the 24 RGB LEDs; omit to leave them alone |
 | `pages.<name>.keys.<n>` | `n` is 1-15 for LCD keys (left to right, top to bottom), 16-18 for the bottom buttons |
 | `label` | Text drawn on the key; `\n` forces a line break, a space in a long label also wraps |

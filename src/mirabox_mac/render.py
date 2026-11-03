@@ -6,7 +6,9 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-from .config import Key
+import datetime as _dt
+
+from .config import ClockConfig, Key
 
 KEY_SIZE = (64, 64)
 FONT_CANDIDATES = [
@@ -72,3 +74,46 @@ def render_key(key: Key) -> Image.Image:
 
 def blank_key(bg: str = "#000000") -> Image.Image:
     return Image.new("RGB", KEY_SIZE, bg)
+
+
+GRID_COLS, GRID_ROWS = 5, 3
+CANVAS = (GRID_COLS * KEY_SIZE[0], GRID_ROWS * KEY_SIZE[1])  # 320 x 192
+
+
+def split_tiles(canvas: Image.Image) -> list[Image.Image]:
+    """Cut a 320x192 canvas into 15 key tiles, ordered key 1..15."""
+    tiles = []
+    for n in range(GRID_COLS * GRID_ROWS):
+        c, r = n % GRID_COLS, n // GRID_COLS
+        x, y = c * KEY_SIZE[0], r * KEY_SIZE[1]
+        tiles.append(canvas.crop((x, y, x + KEY_SIZE[0], y + KEY_SIZE[1])))
+    return tiles
+
+
+def render_clock(now: _dt.datetime, colon_on: bool, cfg: ClockConfig) -> Image.Image:
+    """Full-screen clock: HH:MM across the top two key rows, date on the bottom row."""
+    canvas = Image.new("RGB", CANVAS, cfg.bg)
+    draw = ImageDraw.Draw(canvas)
+
+    time_text = now.strftime("%H:%M")
+    font = _fit_font(draw, "88:88", CANVAS[0] - 16, start=120, floor=40)
+    bbox = draw.textbbox((0, 0), "88:88", font=font)
+    text_h = bbox[3] - bbox[1]
+    area_h = KEY_SIZE[1] * 2 if cfg.show_date else CANVAS[1]
+    y = (area_h - text_h) / 2 - bbox[1]
+    # Draw digits and colon separately so the colon can blink without shifting digits.
+    x = (CANVAS[0] - draw.textlength(time_text, font=font)) / 2
+    for ch in time_text:
+        if ch != ":" or colon_on:
+            draw.text((x, y), ch, font=font, fill=cfg.fg)
+        x += draw.textlength(ch, font=font)
+
+    if cfg.show_date:
+        date_text = now.strftime("%Y-%m-%d  %a")
+        dfont = _fit_font(draw, date_text, CANVAS[0] - 24, start=30, floor=14)
+        w = draw.textlength(date_text, font=dfont)
+        dbbox = draw.textbbox((0, 0), date_text, font=dfont)
+        dh = dbbox[3] - dbbox[1]
+        dy = KEY_SIZE[1] * 2 + (KEY_SIZE[1] - dh) / 2 - dbbox[1]
+        draw.text(((CANVAS[0] - w) / 2, dy), date_text, font=dfont, fill=cfg.date_fg)
+    return canvas

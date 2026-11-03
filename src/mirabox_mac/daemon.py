@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import logging
 import os
 import subprocess
@@ -16,7 +17,7 @@ from StreamDock.InputTypes import EventType
 
 from .actions import run_action
 from .config import LCD_KEYS, Config, ConfigError, load_config
-from .render import blank_key, render_key
+from .render import blank_key, render_clock, render_key, split_tiles
 
 log = logging.getLogger(__name__)
 
@@ -35,6 +36,11 @@ class Deck:
         self.page_name = self.config.default_page
         self.device: StreamDockM18 | None = None
         self.lock = threading.RLock()
+        self.last_activity = time.monotonic()
+        self.clock_mode = False
+        self._clock_stop = threading.Event()
+        self._clock_thread = threading.Thread(target=self._clock_loop, daemon=True)
+        self._clock_thread.start()
         # The SDK writes temporary JPEGs into the current directory.
         self.workdir = Path(tempfile.mkdtemp(prefix="mirabox-mac-"))
         os.chdir(self.workdir)
@@ -55,6 +61,7 @@ class Deck:
             if self.config.led is not None:
                 device.set_led_color(*self.config.led)
             device.set_key_callback(self._on_event)
+            self.touch()
             self.draw_page()
 
     def detach(self, device=None) -> None:
@@ -65,26 +72,71 @@ class Deck:
             self.device = None
 
     # ----- drawing -----
+    def _send_tiles(self, dev, tiles) -> None:
+        for n, img in enumerate(tiles, start=1):
+            path = self.workdir / f"key-{n}.jpg"
+            img.save(path, "JPEG", quality=92)
+            dev.set_key_image(n, str(path))
+        dev.refresh()
+
     def draw_page(self) -> None:
         with self.lock:
             dev = self.device
             if dev is None:
                 return
+            self.clock_mode = False
             page = self.config.page(self.page_name)
-            for n in LCD_KEYS:
-                key = page.keys.get(n)
-                img = render_key(key) if key else blank_key()
-                path = self.workdir / f"key-{n}.jpg"
-                img.save(path, "JPEG", quality=95)
-                dev.set_key_image(n, str(path))
-            dev.refresh()
+            tiles = [render_key(page.keys[n]) if n in page.keys else blank_key() for n in LCD_KEYS]
+            self._send_tiles(dev, tiles)
             log.info("drew page %r", self.page_name)
+
+    # ----- idle clock -----
+    def touch(self) -> None:
+        self.last_activity = time.monotonic()
+
+    def _clock_loop(self) -> None:
+        last_frame = None
+        while not self._clock_stop.wait(0.1):
+            cfg = self.config.clock
+            if cfg.idle_seconds <= 0:
+                continue
+            with self.lock:
+                dev = self.device
+                if dev is None:
+                    continue
+                if not self.clock_mode:
+                    if time.monotonic() - self.last_activity < cfg.idle_seconds:
+                        continue
+                    self.clock_mode = True
+                    last_frame = None
+                    log.info("idle for %ds, showing clock", cfg.idle_seconds)
+                now = dt.datetime.now()
+                colon_on = (now.second % 2 == 0) if cfg.blink else True
+                frame = (now.hour, now.minute, colon_on, now.day)
+                if frame == last_frame:
+                    continue
+                last_frame = frame
+                try:
+                    self._send_tiles(dev, split_tiles(render_clock(now, colon_on, cfg)))
+                except Exception:
+                    log.exception("clock frame failed")
+
+    def wake(self) -> bool:
+        """Leave clock mode. Returns True if the display was showing the clock."""
+        with self.lock:
+            self.touch()
+            if not self.clock_mode:
+                return False
+            log.info("key press, leaving clock")
+            self.draw_page()
+            return True
 
     def switch_page(self, name: str) -> None:
         if name not in self.config.pages:
             log.warning("page %r not defined", name)
             return
         self.page_name = name
+        self.touch()
         self.draw_page()
 
     def reload(self) -> None:
@@ -123,6 +175,8 @@ class Deck:
         try:
             if event.event_type != EventType.BUTTON or event.state != 1:
                 return
+            if self.wake():
+                return  # the press that wakes the screen does nothing else
             n = self._key_position(device, event.key)
             key = self.config.page(self.page_name).keys.get(n)
             log.info("key %d pressed (%s)", n, key.label if key else "unbound")

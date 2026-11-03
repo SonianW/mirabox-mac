@@ -2,6 +2,7 @@
   "brightness": 80,
   "led": [0, 0, 0],
   "default_page": "main",
+  "clock": {"idle_seconds": 30, "show_date": true, "blink": true},
   "pages": {
     "main": {
       "keys": {

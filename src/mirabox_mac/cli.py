@@ -56,6 +56,14 @@ def cmd_preview(args) -> int:
         path = out / f"page-{page.name}.png"
         sheet.save(path)
         print(path)
+    if cfg.clock.idle_seconds > 0:
+        import datetime as dt
+
+        from .render import render_clock
+
+        path = out / "clock.png"
+        render_clock(dt.datetime.now(), True, cfg.clock).save(path)
+        print(path)
     return 0
 
 

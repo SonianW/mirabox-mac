@@ -6,6 +6,7 @@ Config file layout (JSON):
   "brightness": 80,
   "led": [0, 0, 0],
   "default_page": "main",
+  "clock": {"idle_seconds": 30, "show_date": true},
   "pages": {
     "main": {
       "keys": {
@@ -71,12 +72,23 @@ class Page:
 
 
 @dataclass
+class ClockConfig:
+    idle_seconds: int = 30  # 0 disables the idle clock
+    show_date: bool = True
+    bg: str = "#000000"
+    fg: str = "#ffffff"
+    date_fg: str = "#9a9a9a"
+    blink: bool = True
+
+
+@dataclass
 class Config:
     path: Path
     brightness: int
     led: tuple[int, int, int] | None
     default_page: str
     pages: dict[str, Page]
+    clock: ClockConfig = field(default_factory=ClockConfig)
 
     def page(self, name: str) -> Page:
         try:
@@ -175,4 +187,20 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> Config:
             if key.action.type == "page" and key.action.page not in pages:
                 raise ConfigError(f"page {page.name!r} key {key.number}: target page {key.action.page!r} not defined")
 
-    return Config(path=path, brightness=brightness, led=led_t, default_page=default_page, pages=pages)
+    clock_raw = raw.get("clock", {})
+    if clock_raw is None:
+        clock_raw = {"idle_seconds": 0}
+    if not isinstance(clock_raw, dict):
+        raise ConfigError("'clock' must be an object")
+    clock = ClockConfig(
+        idle_seconds=int(clock_raw.get("idle_seconds", 30)),
+        show_date=bool(clock_raw.get("show_date", True)),
+        bg=str(clock_raw.get("bg", "#000000")),
+        fg=str(clock_raw.get("fg", "#ffffff")),
+        date_fg=str(clock_raw.get("date_fg", "#9a9a9a")),
+        blink=bool(clock_raw.get("blink", True)),
+    )
+    if clock.idle_seconds < 0:
+        raise ConfigError("clock.idle_seconds must be >= 0")
+
+    return Config(path=path, brightness=brightness, led=led_t, default_page=default_page, pages=pages, clock=clock)
