@@ -95,3 +95,6 @@ launchd/, scripts/             login agent
 - Device IDs: Mirabox M18 `6603:1009`, M18 EN `6603:1012`. Firmware tested:
   `V3.M18V3_E_HXJDF.03.021`.
 - Only button events are mapped. The M18 has no knobs or touch bar.
+- Input codes: on the tested firmware the device reports LCD key presses by
+  screen position, while the SDK decodes them through its row-swapped image
+  map. `daemon.py` undoes that swap so position n is reported as key n.

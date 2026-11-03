@@ -105,11 +105,25 @@ class Deck:
         log.info("config reloaded")
 
     # ----- input -----
+    @staticmethod
+    def _key_position(device, logical_key) -> int:
+        """Map an SDK logical key to the screen position (1-15 LCD, 16-18 buttons).
+
+        On M18 firmware V3.M18V3_E the hardware reports the LCD key's screen
+        position directly, while the SDK decodes it through the row-swapped
+        image map (rows 1 and 3 exchanged). Undo that swap so a press of the
+        key drawn at position n is reported as n. Buttons 16-18 are unaffected.
+        """
+        n = int(logical_key)
+        if 1 <= n <= 15:
+            return int(device.get_image_key(logical_key))
+        return n
+
     def _on_event(self, device, event) -> None:
         try:
             if event.event_type != EventType.BUTTON or event.state != 1:
                 return
-            n = int(event.key.value)
+            n = self._key_position(device, event.key)
             key = self.config.page(self.page_name).keys.get(n)
             log.info("key %d pressed (%s)", n, key.label if key else "unbound")
             if key is None:
