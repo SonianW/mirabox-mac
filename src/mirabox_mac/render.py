@@ -97,12 +97,11 @@ def split_tiles(canvas: Image.Image, gap: tuple[int, int]) -> list[Image.Image]:
 
 
 def render_clock(now: _dt.datetime, colon_on: bool, cfg: ClockConfig) -> Image.Image:
-    """Full-screen clock: HH:MM in a fixed layout filling the key grid.
+    """Full-screen clock: one glyph per key column, H H : M M, colon in the middle column.
 
-    The colon sits exactly on the horizontal centre of the grid, i.e. the middle
-    of the middle key column; each digit has its own equal-width slot on either
-    side, so nothing moves when the digits or the colon change. Glyphs are
-    scaled independently in x and y to fill the available height.
+    Each glyph is centred on its own column and scaled independently in x and y
+    so the widest digit fills the key width and every glyph fills the available
+    height. Positions are fixed, so nothing shifts when digits or the colon change.
     """
     size = canvas_size(cfg.gap)
     gx, gy = cfg.gap
@@ -114,34 +113,22 @@ def render_clock(now: _dt.datetime, colon_on: bool, cfg: ClockConfig) -> Image.I
     bbox = probe.textbbox((0, 0), "0123456789", font=font)
     glyph_h = bbox[3] - bbox[1]
     digit_adv = max(probe.textlength(d, font=font) for d in "0123456789")
-    colon_adv = probe.textlength(":", font=font)
 
-    margin = 6
+    margin_x, margin_y = 2, 4
     time_rows = 2 if cfg.show_date else GRID_ROWS
     area_h = time_rows * KEY_SIZE[1] + (time_rows - 1) * gy
-    target_h = area_h - 2 * margin
-    sy = target_h / glyph_h
-    # 4 digit slots + 1 colon slot share the width; colon keeps its natural proportion.
-    units = 4 * digit_adv + colon_adv
-    sx = (size[0] - 2 * margin) / units
-    slot_w = digit_adv * sx
-    colon_w = colon_adv * sx
-    cx = size[0] / 2
+    target_h = area_h - 2 * margin_y
+    sx = (KEY_SIZE[0] - 2 * margin_x) / digit_adv
 
-    def glyph(ch: str) -> Image.Image:
+    for col, ch in enumerate(time_text):
+        if ch == ":" and not colon_on:
+            continue
         adv = probe.textlength(ch, font=font)
         layer = Image.new("RGBA", (int(adv) + 2, glyph_h), (0, 0, 0, 0))
         ImageDraw.Draw(layer).text((0, -bbox[1]), ch, font=font, fill=cfg.fg)
-        return layer.resize((max(1, int(adv * sx)), target_h), Image.LANCZOS)
-
-    # slot centres, left to right: d d : d d
-    centres = [cx - colon_w / 2 - slot_w * 1.5, cx - colon_w / 2 - slot_w * 0.5, cx,
-               cx + colon_w / 2 + slot_w * 0.5, cx + colon_w / 2 + slot_w * 1.5]
-    for ch, c in zip(time_text, centres):
-        if ch == ":" and not colon_on:
-            continue
-        g = glyph(ch)
-        canvas.paste(g, (int(c - g.width / 2), margin), g)
+        g = layer.resize((max(1, int(adv * sx)), target_h), Image.LANCZOS)
+        cx = col * (KEY_SIZE[0] + gx) + KEY_SIZE[0] / 2
+        canvas.paste(g, (int(cx - g.width / 2), margin_y), g)
 
     if cfg.show_date:
         draw = ImageDraw.Draw(canvas)
