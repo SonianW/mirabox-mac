@@ -17,7 +17,8 @@ from StreamDock.InputTypes import EventType
 
 from .actions import run_action
 from .config import LCD_KEYS, Config, ConfigError, load_config
-from .render import blank_key, render_clock, render_key, split_tiles
+from .events import load_events
+from .render import blank_key, render_alarm, render_clock, render_key, split_tiles
 
 log = logging.getLogger(__name__)
 
@@ -41,6 +42,15 @@ class Deck:
         self._clock_stop = threading.Event()
         self._clock_thread = threading.Thread(target=self._clock_loop, daemon=True)
         self._clock_thread.start()
+        self.alarm_event = None  # Event currently alarming
+        self._alarm_started = 0.0
+        self._alarm_done: set[str] = set()  # event ids already alarmed or dismissed
+        self._events = []
+        self._events_mtime = None
+        self._alarm_thread = threading.Thread(target=self._alarm_loop, daemon=True)
+        self._alarm_thread.start()
+        self._sync_thread = threading.Thread(target=self._sync_loop, daemon=True)
+        self._sync_thread.start()
         # The SDK writes temporary JPEGs into the current directory.
         self.workdir = Path(tempfile.mkdtemp(prefix="mirabox-mac-"))
         os.chdir(self.workdir)
@@ -104,6 +114,8 @@ class Deck:
                 dev = self.device
                 if dev is None:
                     continue
+                if self.alarm_event is not None:
+                    continue
                 if not self.clock_mode:
                     if time.monotonic() - self.last_activity < cfg.idle_seconds:
                         continue
@@ -121,10 +133,98 @@ class Deck:
                 except Exception:
                     log.exception("clock frame failed")
 
+    # ----- meeting alarm -----
+    def _refresh_events(self) -> None:
+        path = self.config.alarm.events_file
+        try:
+            m = path.stat().st_mtime
+        except FileNotFoundError:
+            m = None
+        if m != self._events_mtime:
+            self._events_mtime = m
+            self._events = load_events(path)
+            log.info("loaded %d events from %s", len(self._events), path)
+
+    def _alarm_loop(self) -> None:
+        phase = 0
+        while not self._clock_stop.wait(0.2):
+            cfg = self.config.alarm
+            if not cfg.enabled:
+                continue
+            self._refresh_events()
+            now = dt.datetime.now()
+            with self.lock:
+                dev = self.device
+                if dev is None:
+                    continue
+                if self.alarm_event is None:
+                    for ev in self._events:
+                        lead = (ev.start - now).total_seconds()
+                        if ev.id not in self._alarm_done and -cfg.max_seconds < lead <= cfg.lead_seconds:
+                            self.alarm_event = ev
+                            self._alarm_started = time.monotonic()
+                            self._alarm_done.add(ev.id)
+                            phase = 0
+                            dev.set_brightness(100)
+                            log.info("ALARM: %r starts at %s", ev.title, ev.start.strftime("%H:%M"))
+                            break
+                    if self.alarm_event is None:
+                        continue
+                ev = self.alarm_event
+                if time.monotonic() - self._alarm_started > cfg.max_seconds:
+                    log.info("alarm for %r timed out", ev.title)
+                    self._end_alarm()
+                    continue
+                seconds_left = max(0, int((ev.start - now).total_seconds()))
+                try:
+                    self._send_tiles(dev, split_tiles(render_alarm(ev.title, seconds_left, phase, self.config.clock.gap), self.config.clock.gap))
+                    dev.set_led_color(*((255, 0, 0) if phase % 2 == 0 else (255, 255, 255)))
+                except Exception:
+                    log.exception("alarm frame failed")
+                phase += 1
+            time.sleep(max(0.0, 1.0 / cfg.fps - 0.2))
+
+    def _sync_loop(self) -> None:
+        from .wave_oauth import OauthError
+        from .wave_sync import sync
+
+        warned = False
+        while True:
+            cfg = self.config.alarm
+            if cfg.enabled and cfg.wave_mcp_url:
+                try:
+                    sync(cfg.wave_mcp_url, cfg.events_file)
+                    warned = False
+                except OauthError as e:
+                    if not warned:
+                        log.warning("calendar sync needs login: %s", e)
+                        warned = True
+                except Exception:
+                    log.exception("calendar sync failed")
+            if self._clock_stop.wait(cfg.sync_minutes * 60):
+                return
+
+    def _end_alarm(self) -> None:
+        """Caller holds self.lock."""
+        self.alarm_event = None
+        dev = self.device
+        if dev is not None:
+            dev.set_brightness(self.config.brightness)
+            if self.config.led is not None:
+                dev.set_led_color(*self.config.led)
+            else:
+                dev.set_led_color(0, 0, 0)
+        self.touch()
+        self.draw_page()
+
     def wake(self) -> bool:
         """Leave clock mode. Returns True if the display was showing the clock."""
         with self.lock:
             self.touch()
+            if self.alarm_event is not None:
+                log.info("alarm dismissed by key press")
+                self._end_alarm()
+                return True
             if not self.clock_mode:
                 return False
             log.info("key press, leaving clock")

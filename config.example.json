@@ -3,6 +3,7 @@
   "led": [0, 0, 0],
   "default_page": "main",
   "clock": {"idle_seconds": 30, "blink": true, "gap": [16, 16]},
+  "alarm": {"lead_seconds": 60, "max_seconds": 600, "wave_mcp_url": "https://<gateway>/_mcp/wave/flare/mcp", "sync_minutes": 10},
   "pages": {
     "main": {
       "keys": {

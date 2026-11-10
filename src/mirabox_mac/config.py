@@ -83,6 +83,17 @@ class ClockConfig:
 
 
 @dataclass
+class AlarmConfig:
+    events_file: Path = Path("~/.config/mirabox-mac/events.json").expanduser()
+    lead_seconds: int = 60  # start alarming this long before the event
+    max_seconds: int = 600  # give up if nobody presses a key
+    fps: int = 4  # frame alternation rate
+    enabled: bool = True
+    wave_mcp_url: str | None = None  # MCP endpoint of the Wave calendar; None disables sync
+    sync_minutes: int = 10
+
+
+@dataclass
 class Config:
     path: Path
     brightness: int
@@ -90,6 +101,7 @@ class Config:
     default_page: str
     pages: dict[str, Page]
     clock: ClockConfig = field(default_factory=ClockConfig)
+    alarm: AlarmConfig = field(default_factory=AlarmConfig)
 
     def page(self, name: str) -> Page:
         try:
@@ -207,4 +219,21 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> Config:
     if clock.idle_seconds < 0:
         raise ConfigError("clock.idle_seconds must be >= 0")
 
-    return Config(path=path, brightness=brightness, led=led_t, default_page=default_page, pages=pages, clock=clock)
+    alarm_raw = raw.get("alarm", {})
+    if alarm_raw is None:
+        alarm_raw = {"enabled": False}
+    if not isinstance(alarm_raw, dict):
+        raise ConfigError("'alarm' must be an object")
+    alarm = AlarmConfig(
+        events_file=Path(alarm_raw.get("events_file", "~/.config/mirabox-mac/events.json")).expanduser(),
+        lead_seconds=int(alarm_raw.get("lead_seconds", 60)),
+        max_seconds=int(alarm_raw.get("max_seconds", 600)),
+        fps=max(1, int(alarm_raw.get("fps", 4))),
+        enabled=bool(alarm_raw.get("enabled", True)),
+        wave_mcp_url=alarm_raw.get("wave_mcp_url") or None,
+        sync_minutes=max(1, int(alarm_raw.get("sync_minutes", 10))),
+    )
+    if not alarm.events_file.is_absolute():
+        alarm.events_file = base / alarm.events_file
+
+    return Config(path=path, brightness=brightness, led=led_t, default_page=default_page, pages=pages, clock=clock, alarm=alarm)

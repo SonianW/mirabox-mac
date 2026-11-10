@@ -77,6 +77,27 @@ Default path `~/.config/mirabox-mac/config.json`, override with `-c` or
 
 Actions run detached, so a slow command never blocks the key reader.
 
+## Meeting alarm
+
+`alarm` in the config turns the deck into a flashing full-screen reminder
+`lead_seconds` before each calendar event: red/white/yellow frames alternate
+at `fps`, the LEDs flash, brightness goes to 100. Any key press ends it and
+does nothing else; it also stops after `max_seconds`.
+
+Events come from `events_file` (default `~/.config/mirabox-mac/events.json`,
+format in `src/mirabox_mac/events.py`). With `wave_mcp_url` set, the daemon
+fills that file itself every `sync_minutes` from the Wave calendar MCP:
+
+```bash
+uv run mirabox-mac wave login    # OAuth in the browser; token kept in ~/.config/mirabox-mac/oauth/, ~5.6 days, no refresh
+uv run mirabox-mac wave status
+uv run mirabox-mac wave sync     # one-off pull
+uv run mirabox-mac alarm-test --seconds 90   # fake event to see the alarm
+```
+
+The OAuth client follows the MCP spec: discovery from the 401 challenge,
+dynamic registration with a loopback redirect on port 51733, PKCE.
+
 ## Layout
 
 ```
@@ -85,7 +106,10 @@ src/mirabox_mac/
   render.py   64x64 key images (Pillow)
   actions.py  shell / open / page
   daemon.py   open device, draw page, dispatch presses, hotplug, config reload
-  cli.py      run | devices | check | preview
+  events.py   events file loader
+  wave_oauth.py  OAuth 2.1 client + token store
+  wave_sync.py   MCP client, calendar → events file
+  cli.py      run | devices | check | preview | wave | alarm-test
 vendor/StreamDock-Device-SDK   official SDK submodule (Python-SDK installed editable)
 launchd/, scripts/             login agent
 ```

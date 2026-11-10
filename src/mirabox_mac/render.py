@@ -16,11 +16,22 @@ FONT_CANDIDATES = [
     "/System/Library/Fonts/SFNS.ttf",
     "/System/Library/Fonts/Helvetica.ttc",
     "/System/Library/Fonts/PingFang.ttc",
+    "/System/Library/Fonts/Hiragino Sans GB.ttc",
+    "/System/Library/Fonts/Supplemental/Songti.ttc",
+    "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
 ]
 
 
-def _font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    for path in FONT_CANDIDATES:
+CJK_FONT_CANDIDATES = [
+    "/System/Library/Fonts/PingFang.ttc",
+    "/System/Library/Fonts/Hiragino Sans GB.ttc",
+    "/System/Library/Fonts/STHeiti Medium.ttc",
+    "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+]
+
+
+def _font(size: int, cjk: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    for path in (CJK_FONT_CANDIDATES if cjk else FONT_CANDIDATES):
         if Path(path).exists():
             try:
                 return ImageFont.truetype(path, size)
@@ -29,14 +40,19 @@ def _font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
+def _has_cjk(text: str) -> bool:
+    return any("\u3000" <= ch <= "\u9fff" or "\uff00" <= ch <= "\uffef" for ch in text)
+
+
 def _fit_font(draw: ImageDraw.ImageDraw, text: str, max_width: int, start: int = 14, floor: int = 8):
+    cjk = _has_cjk(text)
     size = start
     while size > floor:
-        font = _font(size)
+        font = _font(size, cjk)
         if draw.textlength(text, font=font) <= max_width:
             return font
         size -= 1
-    return _font(floor)
+    return _font(floor, cjk)
 
 
 def render_key(key: Key) -> Image.Image:
@@ -140,4 +156,52 @@ def render_clock(now: _dt.datetime, colon_on: bool, cfg: ClockConfig) -> Image.I
         row_top = 2 * (KEY_SIZE[1] + gy)
         dy = row_top + (KEY_SIZE[1] - dh) / 2 - dbbox[1]
         draw.text(((size[0] - w) / 2, dy), date_text, font=dfont, fill=cfg.date_fg)
+    return canvas
+
+
+def _wrap(draw: ImageDraw.ImageDraw, text: str, font, max_w: int, max_lines: int) -> list[str]:
+    lines, cur = [], ""
+    for ch in text:
+        if draw.textlength(cur + ch, font=font) <= max_w:
+            cur += ch
+        else:
+            lines.append(cur)
+            cur = ch
+            if len(lines) == max_lines:
+                break
+    if cur and len(lines) < max_lines:
+        lines.append(cur)
+    if len(lines) == max_lines and draw.textlength("".join(lines) , font=font) < draw.textlength(text, font=font):
+        lines[-1] = lines[-1][:-1] + "…"
+    return lines
+
+
+def render_alarm(title: str, seconds_left: int, phase: int, gap: tuple[int, int]) -> Image.Image:
+    """One frame of the meeting alarm. `phase` alternates colours and jitters the text."""
+    size = canvas_size(gap)
+    gx, gy = gap
+    palette = [("#d00000", "#ffffff"), ("#ffffff", "#d00000"), ("#ffd400", "#000000"), ("#000000", "#ffd400")]
+    bg, fg = palette[phase % len(palette)]
+    canvas = Image.new("RGB", size, bg)
+    draw = ImageDraw.Draw(canvas)
+    jitter = 6 if phase % 2 else -6
+
+    # Top two rows: the meeting title, up to two lines.
+    area_h = KEY_SIZE[1] * 2 + gy
+    font = _fit_font(draw, title, size[0] - 24, start=44, floor=26)
+    lines = _wrap(draw, title, font, size[0] - 24, 2)
+    line_h = font.size + 6
+    y = (area_h - line_h * len(lines)) / 2
+    for line in lines:
+        w = draw.textlength(line, font=font)
+        draw.text(((size[0] - w) / 2 + jitter, y), line, font=font, fill=fg)
+        y += line_h
+
+    # Bottom row: countdown.
+    text = f"{seconds_left} 秒后开会" if seconds_left > 0 else "开会了！"
+    bfont = _fit_font(draw, text, size[0] - 24, start=40, floor=20)
+    bbox = draw.textbbox((0, 0), text, font=bfont)
+    row_top = 2 * (KEY_SIZE[1] + gy)
+    w = bbox[2] - bbox[0]
+    draw.text(((size[0] - w) / 2 - jitter, row_top + (KEY_SIZE[1] - (bbox[3] - bbox[1])) / 2 - bbox[1]), text, font=bfont, fill=fg)
     return canvas

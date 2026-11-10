@@ -76,7 +76,58 @@ def cmd_preview(args) -> int:
         path = out / "clock-keys.png"
         sheet.save(path)
         print(path)
+    from .render import render_alarm
+
+    for ph in (0, 1):
+        path = out / f"alarm-{ph}.png"
+        render_alarm("Web domain 周会", 37, ph, cfg.clock.gap).save(path)
+        print(path)
     return 0
+
+
+def cmd_alarm_test(args) -> int:
+    """Append a fake event starting in N seconds to the events file so the running daemon alarms."""
+    import datetime as dt
+    import json
+
+    cfg = load_config(Path(args.config).expanduser())
+    path = cfg.alarm.events_file
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = json.loads(path.read_text()) if path.exists() else {"events": []}
+    start = (dt.datetime.now() + dt.timedelta(seconds=args.seconds)).replace(second=0, microsecond=0)
+    data.setdefault("events", []).append({"id": f"test-{int(dt.datetime.now().timestamp())}", "title": args.title, "start": start.strftime("%Y-%m-%d %H:%M")})
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+    print(f"test event {args.title!r} at {start:%H:%M} written to {path}; alarm begins {cfg.alarm.lead_seconds}s before")
+    return 0
+
+
+def cmd_wave(args) -> int:
+    from .wave_oauth import TokenStore, host_of, login
+    from .wave_sync import sync
+
+    cfg = load_config(Path(args.config).expanduser())
+    url = cfg.alarm.wave_mcp_url
+    if not url:
+        print("config error: alarm.wave_mcp_url is not set", file=sys.stderr)
+        return 2
+    store = TokenStore()
+    if args.action == "login":
+        t = login(url, store, open_browser=not args.no_browser)
+        print(f"logged in to {host_of(url)}; token valid {t.remaining() / 86400:.1f} days")
+        return 0
+    if args.action == "status":
+        t = store.token(host_of(url))
+        print("no token" if t is None else f"token for {host_of(url)}: {t.remaining() / 86400:.1f} days left")
+        return 0 if t and t.remaining() > 0 else 1
+    if args.action == "sync":
+        n = sync(url, cfg.alarm.events_file)
+        print(f"{n} events written to {cfg.alarm.events_file}")
+        return 0
+    if args.action == "forget":
+        store.forget(host_of(url))
+        print("token removed")
+        return 0
+    return 2
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -99,6 +150,16 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--out", default="/tmp/mirabox-mac-preview")
     s.set_defaults(fn=cmd_preview)
 
+    s = sub.add_parser("wave", help="Wave calendar: login | status | sync | forget")
+    s.add_argument("action", choices=["login", "status", "sync", "forget"])
+    s.add_argument("--no-browser", action="store_true", help="print the URL instead of opening a browser")
+    s.set_defaults(fn=cmd_wave)
+
+    s = sub.add_parser("alarm-test", help="write a fake event into the events file to trigger the alarm")
+    s.add_argument("--seconds", type=int, default=90, help="event starts this many seconds from now")
+    s.add_argument("--title", default="测试会议 Web domain 周会")
+    s.set_defaults(fn=cmd_alarm_test)
+
     args = p.parse_args(argv)
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
@@ -110,6 +171,13 @@ def main(argv: list[str] | None = None) -> int:
     except ConfigError as e:
         print(f"config error: {e}", file=sys.stderr)
         return 2
+    except Exception as e:  # OauthError and friends
+        from .wave_oauth import OauthError
+
+        if isinstance(e, OauthError):
+            print(f"auth error: {e}", file=sys.stderr)
+            return 3
+        raise
 
 
 if __name__ == "__main__":
