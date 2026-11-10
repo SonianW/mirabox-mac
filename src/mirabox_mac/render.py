@@ -159,49 +159,79 @@ def render_clock(now: _dt.datetime, colon_on: bool, cfg: ClockConfig) -> Image.I
     return canvas
 
 
-def _wrap(draw: ImageDraw.ImageDraw, text: str, font, max_w: int, max_lines: int) -> list[str]:
-    lines, cur = [], ""
+def _cells(text: str, max_cells: int) -> list[str]:
+    """Pack text into per-key cells: each CJK character and each Latin word gets its own cell."""
+    cells: list[str] = []
+    cur = ""
     for ch in text:
-        if draw.textlength(cur + ch, font=font) <= max_w:
-            cur += ch
+        if _has_cjk(ch):
+            if cur:
+                cells.append(cur)
+                cur = ""
+            cells.append(ch)
+        elif ch.isspace():
+            if cur:
+                cells.append(cur)
+                cur = ""
         else:
-            lines.append(cur)
-            cur = ch
-            if len(lines) == max_lines:
-                break
-    if cur and len(lines) < max_lines:
-        lines.append(cur)
-    if len(lines) == max_lines and draw.textlength("".join(lines) , font=font) < draw.textlength(text, font=font):
-        lines[-1] = lines[-1][:-1] + "…"
-    return lines
+            cur += ch
+    if cur:
+        cells.append(cur)
+    if len(cells) > max_cells:
+        cells = cells[: max_cells - 1] + ["…"]
+    return cells
 
 
-def render_alarm(title: str, seconds_left: int, phase: int, gap: tuple[int, int]) -> Image.Image:
-    """One frame of the meeting alarm. `phase` alternates colours and jitters the text."""
-    size = canvas_size(gap)
-    gx, gy = gap
+def _row_font(cells: list[str], scale: float):
+    """One font size for a whole row: the largest that fits every cell's text in a key."""
+    probe = ImageDraw.Draw(Image.new("L", (1, 1)))
+    size = int(58 * scale)
+    floor = 12
+    while size > floor:
+        if all(probe.textlength(c, font=_font(size, _has_cjk(c))) <= 60 * scale for c in cells if c):
+            break
+        size -= 1
+    return size
+
+
+def _cell_tile(text: str, bg: str, fg: str, size: int) -> Image.Image:
+    tile = Image.new("RGB", KEY_SIZE, bg)
+    if not text:
+        return tile
+    draw = ImageDraw.Draw(tile)
+    font = _font(size, _has_cjk(text))
+    bbox = draw.textbbox((0, 0), text, font=font)
+    w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    draw.text(((KEY_SIZE[0] - w) / 2 - bbox[0], (KEY_SIZE[1] - h) / 2 - bbox[1]), text, font=font, fill=fg)
+    return tile
+
+
+def _row_tiles(cells: list[str], bg: str, fg: str, scale: float) -> list[Image.Image]:
+    pad = (GRID_COLS - len(cells)) // 2
+    slots = [""] * pad + cells + [""] * (GRID_COLS - len(cells) - pad)
+    size = _row_font(cells, scale)
+    return [_cell_tile(c, bg, fg, size) for c in slots]
+
+
+def render_alarm_tiles(title: str, seconds_left: int, phase: int) -> list[Image.Image]:
+    """15 key tiles for one alarm frame: title across rows 1-2 (one cell per key), countdown on row 3.
+
+    Text never crosses the physical gap between keys. `phase` alternates the
+    colour scheme and pulses the glyph size.
+    """
     palette = [("#d00000", "#ffffff"), ("#ffffff", "#d00000"), ("#ffd400", "#000000"), ("#000000", "#ffd400")]
     bg, fg = palette[phase % len(palette)]
-    canvas = Image.new("RGB", size, bg)
-    draw = ImageDraw.Draw(canvas)
-    jitter = 6 if phase % 2 else -6
+    scale = 1.0 if phase % 2 == 0 else 0.8
 
-    # Top two rows: the meeting title, up to two lines.
-    area_h = KEY_SIZE[1] * 2 + gy
-    font = _fit_font(draw, title, size[0] - 24, start=44, floor=26)
-    lines = _wrap(draw, title, font, size[0] - 24, 2)
-    line_h = font.size + 6
-    y = (area_h - line_h * len(lines)) / 2
-    for line in lines:
-        w = draw.textlength(line, font=font)
-        draw.text(((size[0] - w) / 2 + jitter, y), line, font=font, fill=fg)
-        y += line_h
-
-    # Bottom row: countdown.
-    text = f"{seconds_left} 秒后开会" if seconds_left > 0 else "开会了！"
-    bfont = _fit_font(draw, text, size[0] - 24, start=40, floor=20)
-    bbox = draw.textbbox((0, 0), text, font=bfont)
-    row_top = 2 * (KEY_SIZE[1] + gy)
-    w = bbox[2] - bbox[0]
-    draw.text(((size[0] - w) / 2 - jitter, row_top + (KEY_SIZE[1] - (bbox[3] - bbox[1])) / 2 - bbox[1]), text, font=bfont, fill=fg)
-    return canvas
+    title_cells = _cells(title, GRID_COLS * 2)
+    if len(title_cells) <= GRID_COLS:
+        rows = [title_cells, []]
+    else:
+        split = (len(title_cells) + 1) // 2
+        rows = [title_cells[:split], title_cells[split:]]
+    tiles: list[Image.Image] = []
+    for row in rows:
+        tiles += _row_tiles(row, bg, fg, scale)
+    bottom = _cells(f"{seconds_left}秒后开会" if seconds_left > 0 else "开会了！", GRID_COLS)
+    tiles += _row_tiles(bottom, bg, fg, scale)
+    return tiles

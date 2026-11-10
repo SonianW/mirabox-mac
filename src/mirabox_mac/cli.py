@@ -76,11 +76,17 @@ def cmd_preview(args) -> int:
         path = out / "clock-keys.png"
         sheet.save(path)
         print(path)
-    from .render import render_alarm
+    from .render import render_alarm_tiles
 
+    gx, gy = cfg.clock.gap
     for ph in (0, 1):
+        tiles = render_alarm_tiles("Web domain 周会", 37, ph)
+        sheet = Image.new("RGB", (cols * KEY_SIZE[0] + (cols - 1) * gx, rows * KEY_SIZE[1] + (rows - 1) * gy), "#303030")
+        for n, tile in enumerate(tiles):
+            c, r = n % cols, n // cols
+            sheet.paste(tile, (c * (KEY_SIZE[0] + gx), r * (KEY_SIZE[1] + gy)))
         path = out / f"alarm-{ph}.png"
-        render_alarm("Web domain 周会", 37, ph, cfg.clock.gap).save(path)
+        sheet.save(path)
         print(path)
     return 0
 

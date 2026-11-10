@@ -18,7 +18,7 @@ from StreamDock.InputTypes import EventType
 from .actions import run_action
 from .config import LCD_KEYS, Config, ConfigError, load_config
 from .events import load_events
-from .render import blank_key, render_alarm, render_clock, render_key, split_tiles
+from .render import blank_key, render_alarm_tiles, render_clock, render_key, split_tiles
 
 log = logging.getLogger(__name__)
 
@@ -177,7 +177,7 @@ class Deck:
                     continue
                 seconds_left = max(0, int((ev.start - now).total_seconds()))
                 try:
-                    self._send_tiles(dev, split_tiles(render_alarm(ev.title, seconds_left, phase, self.config.clock.gap), self.config.clock.gap))
+                    self._send_tiles(dev, render_alarm_tiles(ev.title, seconds_left, phase))
                     dev.set_led_color(*((255, 0, 0) if phase % 2 == 0 else (255, 255, 255)))
                 except Exception:
                     log.exception("alarm frame failed")
