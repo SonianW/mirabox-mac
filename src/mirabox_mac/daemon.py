@@ -37,6 +37,7 @@ class Deck:
         self.page_name = self.config.default_page
         self.device: StreamDockM18 | None = None
         self.lock = threading.RLock()
+        self._write_failures = 0
         self.last_activity = time.monotonic()
         self.clock_mode = False
         self._clock_stop = threading.Event()
@@ -83,11 +84,37 @@ class Deck:
 
     # ----- drawing -----
     def _send_tiles(self, dev, tiles) -> None:
+        failed = 0
         for n, img in enumerate(tiles, start=1):
             path = self.workdir / f"key-{n}.jpg"
             img.save(path, "JPEG", quality=92)
-            dev.set_key_image(n, str(path))
+            if dev.set_key_image(n, str(path)) != 0:
+                failed += 1
         dev.refresh()
+        if failed:
+            self._write_failures += 1
+            if self._write_failures >= 3:
+                log.warning("key writes keep failing (%d frames); reopening device", self._write_failures)
+                self._reopen()
+        else:
+            self._write_failures = 0
+
+    def _reopen(self) -> None:
+        """Drop a stale handle (after sleep or a USB re-enumeration) and re-attach. Caller holds self.lock."""
+        self._write_failures = 0
+        dev = self.device
+        self.device = None
+        if dev is not None:
+            try:
+                dev.close(notify=False)
+            except Exception:
+                pass
+        time.sleep(1)
+        for d in DeviceManager().enumerate():
+            self.attach(d)
+            if self.device is not None:
+                return
+        log.warning("reopen found no device; waiting for hotplug")
 
     def draw_page(self) -> None:
         with self.lock:

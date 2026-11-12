@@ -121,6 +121,9 @@ launchd/, scripts/             login agent
 - Device IDs: Mirabox M18 `6603:1009`, M18 EN `6603:1012`. Firmware tested:
   `V3.M18V3_E_HXJDF.03.021`.
 - Only button events are mapped. The M18 has no knobs or touch bar.
+- After Mac sleep or a USB re-enumeration the SDK handle can go stale while
+  the device path stays the same, so hotplug polling never fires. The daemon
+  counts failed key writes and reopens the device after three bad frames.
 - Input codes: on the tested firmware the device reports LCD key presses by
   screen position, while the SDK decodes them through its row-swapped image
   map. `daemon.py` undoes that swap so position n is reported as key n.
