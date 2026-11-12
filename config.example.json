@@ -1,31 +1,154 @@
 {
   "brightness": 80,
-  "led": [0, 0, 0],
+  "led": [
+    0,
+    0,
+    0
+  ],
   "default_page": "main",
-  "clock": {"idle_seconds": 30, "blink": true, "gap": [16, 16]},
-  "alarm": {"lead_seconds": 60, "max_seconds": 600, "wave_mcp_url": "https://<gateway>/_mcp/wave/flare/mcp", "sync_minutes": 10,
-            "reminders": [{"title": "吃饭", "time": "11:50", "days": "weekdays"}]},
+  "clock": {
+    "idle_seconds": 30,
+    "blink": true,
+    "gap": [
+      16,
+      16
+    ]
+  },
+  "alarm": {
+    "lead_seconds": 60,
+    "max_seconds": 600,
+    "wave_mcp_url": "https://<gateway>/_mcp/wave/flare/mcp",
+    "sync_minutes": 10,
+    "reminders": [
+      {
+        "title": "吃饭",
+        "time": "11:50",
+        "days": "weekdays"
+      }
+    ]
+  },
   "pages": {
     "main": {
       "keys": {
-        "1":  {"label": "Terminal", "bg": "#1e5aa8", "action": {"type": "open", "target": "Terminal"}},
-        "2":  {"label": "Safari",   "bg": "#0a7aff", "action": {"type": "open", "target": "Safari"}},
-        "3":  {"label": "Notes",    "bg": "#c99700", "action": {"type": "open", "target": "Notes"}},
-        "5":  {"label": "Lock",     "bg": "#7a1f1f", "action": {"type": "shell", "command": "pmset displaysleepnow"}},
-        "6":  {"label": "Mute",     "bg": "#333333", "action": {"type": "shell", "command": "osascript -e 'set volume output muted not (output muted of (get volume settings))'"}},
-        "7":  {"label": "Vol -",    "bg": "#333333", "action": {"type": "shell", "command": "osascript -e 'set volume output volume ((output volume of (get volume settings)) - 10)'"}},
-        "8":  {"label": "Vol +",    "bg": "#333333", "action": {"type": "shell", "command": "osascript -e 'set volume output volume ((output volume of (get volume settings)) + 10)'"}},
-        "11": {"label": "Screen\nshot", "bg": "#2d6a4f", "action": {"type": "shell", "command": "screencapture -i ~/Desktop/screenshot-$(date +%Y%m%d-%H%M%S).png"}},
-        "15": {"label": "More",     "bg": "#444444", "action": {"type": "page", "page": "tools"}},
-        "16": {"action": {"type": "page", "page": "main"}}
+        "1": {
+          "label": "Terminal",
+          "bg": "#1e5aa8",
+          "action": {
+            "type": "open",
+            "target": "Terminal"
+          }
+        },
+        "2": {
+          "label": "Safari",
+          "bg": "#0a7aff",
+          "action": {
+            "type": "open",
+            "target": "Safari"
+          }
+        },
+        "3": {
+          "label": "Notes",
+          "bg": "#c99700",
+          "action": {
+            "type": "open",
+            "target": "Notes"
+          }
+        },
+        "5": {
+          "label": "Lock",
+          "bg": "#7a1f1f",
+          "action": {
+            "type": "shell",
+            "command": "pmset displaysleepnow"
+          }
+        },
+        "6": {
+          "label": "Mute",
+          "bg": "#333333",
+          "action": {
+            "type": "shell",
+            "command": "osascript -e 'set volume output muted not (output muted of (get volume settings))'"
+          }
+        },
+        "7": {
+          "label": "Vol -",
+          "bg": "#333333",
+          "action": {
+            "type": "shell",
+            "command": "osascript -e 'set volume output volume ((output volume of (get volume settings)) - 10)'"
+          }
+        },
+        "8": {
+          "label": "Vol +",
+          "bg": "#333333",
+          "action": {
+            "type": "shell",
+            "command": "osascript -e 'set volume output volume ((output volume of (get volume settings)) + 10)'"
+          }
+        },
+        "11": {
+          "label": "Screen\nshot",
+          "bg": "#2d6a4f",
+          "action": {
+            "type": "shell",
+            "command": "screencapture -i ~/Desktop/screenshot-$(date +%Y%m%d-%H%M%S).png"
+          }
+        },
+        "15": {
+          "label": "More",
+          "bg": "#444444",
+          "action": {
+            "type": "page",
+            "page": "tools"
+          }
+        },
+        "16": {
+          "action": {
+            "type": "page",
+            "page": "main"
+          }
+        },
+        "4": {
+          "label": "日程",
+          "bg": "#2b4a6b",
+          "action": {
+            "type": "agenda"
+          }
+        }
       }
     },
     "tools": {
       "keys": {
-        "1":  {"label": "Activity", "bg": "#5a3e8a", "action": {"type": "open", "target": "Activity Monitor"}},
-        "2":  {"label": "Settings", "bg": "#5a3e8a", "action": {"type": "open", "target": "System Settings"}},
-        "15": {"label": "Back",     "bg": "#444444", "action": {"type": "page", "page": "main"}},
-        "16": {"action": {"type": "page", "page": "main"}}
+        "1": {
+          "label": "Activity",
+          "bg": "#5a3e8a",
+          "action": {
+            "type": "open",
+            "target": "Activity Monitor"
+          }
+        },
+        "2": {
+          "label": "Settings",
+          "bg": "#5a3e8a",
+          "action": {
+            "type": "open",
+            "target": "System Settings"
+          }
+        },
+        "15": {
+          "label": "Back",
+          "bg": "#444444",
+          "action": {
+            "type": "page",
+            "page": "main"
+          }
+        },
+        "16": {
+          "action": {
+            "type": "page",
+            "page": "main"
+          }
+        }
       }
     }
   }

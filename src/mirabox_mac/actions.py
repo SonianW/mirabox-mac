@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 
 
 def run_action(action: Action, switch_page: Callable[[str], None]) -> None:
-    if action.type == "none":
+    if action.type in ("none", "agenda"):  # agenda is handled by the daemon itself
         return
     if action.type == "page":
         assert action.page

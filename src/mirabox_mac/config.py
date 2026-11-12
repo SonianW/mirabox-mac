@@ -37,7 +37,7 @@ from typing import Any
 LCD_KEYS = range(1, 16)
 BUTTON_KEYS = range(16, 19)
 ALL_KEYS = range(1, 19)
-ACTION_TYPES = {"shell", "open", "page", "none"}
+ACTION_TYPES = {"shell", "open", "page", "agenda", "none"}
 
 DEFAULT_CONFIG_PATH = Path(
     os.environ.get("MIRABOX_MAC_CONFIG", "~/.config/mirabox-mac/config.json")

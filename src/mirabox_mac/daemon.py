@@ -18,7 +18,7 @@ from StreamDock.InputTypes import EventType
 from .actions import run_action
 from .config import LCD_KEYS, Config, ConfigError, load_config
 from .events import load_events, reminder_events
-from .render import blank_key, render_alarm_tiles, render_clock, render_key, split_tiles
+from .render import blank_key, render_agenda_tiles, render_alarm_tiles, render_clock, render_key, split_tiles
 
 log = logging.getLogger(__name__)
 
@@ -43,6 +43,7 @@ class Deck:
         self._clock_stop = threading.Event()
         self._clock_thread = threading.Thread(target=self._clock_loop, daemon=True)
         self._clock_thread.start()
+        self.agenda_mode = False
         self.alarm_event = None  # Event currently alarming
         self._alarm_started = 0.0
         self._alarm_done: set[str] = set()  # event ids already alarmed or dismissed
@@ -122,6 +123,7 @@ class Deck:
             if dev is None:
                 return
             self.clock_mode = False
+            self.agenda_mode = False
             page = self.config.page(self.page_name)
             tiles = [render_key(page.keys[n]) if n in page.keys else blank_key() for n in LCD_KEYS]
             self._send_tiles(dev, tiles)
@@ -141,7 +143,7 @@ class Deck:
                 dev = self.device
                 if dev is None:
                     continue
-                if self.alarm_event is not None:
+                if self.alarm_event is not None or self.agenda_mode:
                     continue
                 if not self.clock_mode:
                     if time.monotonic() - self.last_activity < cfg.idle_seconds:
@@ -246,6 +248,23 @@ class Deck:
         self.touch()
         self.draw_page()
 
+    def show_agenda(self) -> None:
+        """Show the next three alarms (calendar events + reminders) until a key is pressed."""
+        with self.lock:
+            dev = self.device
+            if dev is None:
+                return
+            self._refresh_events()
+            now = dt.datetime.now()
+            upcoming = [e for e in self._events if e.start >= now][:3]
+            items = [(e.start.strftime("%H:%M"), e.title, e.start.date() == now.date()) for e in upcoming]
+            if not items:
+                items = [("--:--", "没有后续提醒", True)]
+            self.agenda_mode = True
+            self.touch()
+            self._send_tiles(dev, render_agenda_tiles(items))
+            log.info("showing agenda: %s", "; ".join(f"{t} {s}" for t, s, _ in items))
+
     def wake(self) -> bool:
         """Leave clock mode. Returns True if the display was showing the clock."""
         with self.lock:
@@ -254,9 +273,9 @@ class Deck:
                 log.info("alarm dismissed by key press")
                 self._end_alarm()
                 return True
-            if not self.clock_mode:
+            if not self.clock_mode and not self.agenda_mode:
                 return False
-            log.info("key press, leaving clock")
+            log.info("key press, leaving %s", "agenda" if self.agenda_mode else "clock")
             self.draw_page()
             return True
 
@@ -310,6 +329,9 @@ class Deck:
             key = self.config.page(self.page_name).keys.get(n)
             log.info("key %d pressed (%s)", n, key.label if key else "unbound")
             if key is None:
+                return
+            if key.action.type == "agenda":
+                self.show_agenda()
                 return
             threading.Thread(target=run_action, args=(key.action, self.switch_page), daemon=True).start()
         except Exception:

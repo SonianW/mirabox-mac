@@ -235,3 +235,29 @@ def render_alarm_tiles(title: str, seconds_left: int, phase: int) -> list[Image.
     bottom = _cells(f"{seconds_left}秒后开会" if seconds_left > 0 else "开会了！", GRID_COLS)
     tiles += _row_tiles(bottom, bg, fg, scale)
     return tiles
+
+
+def render_agenda_tiles(items: list[tuple[str, str, bool]], bg: str = "#101820", fg: str = "#ffffff") -> list[Image.Image]:
+    """Upcoming alarms, one per row: (HH:MM, title, is_today). Time in column 1, title in columns 2-5."""
+    tiles: list[Image.Image] = []
+    for r in range(GRID_ROWS):
+        if r >= len(items):
+            tiles += [Image.new("RGB", KEY_SIZE, bg)] * GRID_COLS
+            continue
+        when, title, today = items[r]
+        tcol = "#4cc9f0" if today else "#f4a261"
+        tile = Image.new("RGB", KEY_SIZE, bg)
+        d = ImageDraw.Draw(tile)
+        f = _font(22)
+        bb = d.textbbox((0, 0), when, font=f)
+        d.text(((KEY_SIZE[0] - (bb[2] - bb[0])) / 2 - bb[0], 14 - bb[1]), when, font=f, fill=tcol)
+        f2 = _font(12)
+        tag = "今天" if today else "明天"
+        bb2 = d.textbbox((0, 0), tag, font=_font(12, True))
+        d.text(((KEY_SIZE[0] - (bb2[2] - bb2[0])) / 2 - bb2[0], 42 - bb2[1]), tag, font=_font(12, True), fill="#8a8a8a")
+        tiles.append(tile)
+        cells = _cells(title, GRID_COLS - 1)
+        size = _row_font(cells, 0.75)
+        cells += [""] * (GRID_COLS - 1 - len(cells))
+        tiles += [_cell_tile(c, bg, fg, size) for c in cells]
+    return tiles

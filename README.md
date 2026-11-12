@@ -73,7 +73,7 @@ Default path `~/.config/mirabox-mac/config.json`, override with `-c` or
 | `label` | Text drawn on the key; `\n` forces a line break, a space in a long label also wraps |
 | `icon` | PNG path, relative to the config file; drawn above the label |
 | `bg` / `fg` | Background and text colours |
-| `action.type` | `shell` (runs `command` through `/bin/sh`), `open` (`open -a <app>`, or `open <url or path>`), `page` (switch to `page`), `none` |
+| `action.type` | `shell` (runs `command` through `/bin/sh`), `open` (`open -a <app>`, or `open <url or path>`), `page` (switch to `page`), `agenda` (show the next three alarms full-screen until a key is pressed), `none` |
 
 Actions run detached, so a slow command never blocks the key reader.
 
