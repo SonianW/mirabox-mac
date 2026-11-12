@@ -62,3 +62,27 @@ def next_event(events: list[Event], now: dt.datetime) -> Event | None:
         if e.start >= now:
             return e
     return None
+
+
+_DAY_NAMES = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+
+
+def _days_match(spec: str, d: dt.date) -> bool:
+    spec = (spec or "daily").lower()
+    if spec == "daily":
+        return True
+    if spec == "weekdays":
+        return d.weekday() < 5
+    return _DAY_NAMES[d.weekday()] in {x.strip()[:3] for x in spec.split(",")}
+
+
+def reminder_events(reminders: list[dict], today: dt.date) -> list[Event]:
+    """Expand recurring local reminders into concrete events for today and tomorrow."""
+    out: list[Event] = []
+    for r in reminders:
+        hh, mm = (int(x) for x in str(r["time"]).split(":"))
+        for d in (today, today + dt.timedelta(days=1)):
+            if _days_match(r.get("days", "daily"), d):
+                start = dt.datetime.combine(d, dt.time(hh, mm))
+                out.append(Event(id=f"reminder:{r['title']}@{start:%Y-%m-%d %H:%M}", title=str(r["title"]), start=start, end=None, url=None))
+    return out

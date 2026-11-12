@@ -95,6 +95,10 @@ uv run mirabox-mac wave sync     # one-off pull
 uv run mirabox-mac alarm-test --seconds 90   # fake event to see the alarm
 ```
 
+Fixed daily reminders that are not in the calendar go in `alarm.reminders`:
+`[{"title": "吃饭", "time": "11:50", "days": "weekdays"}]`, `days` is
+`daily`, `weekdays` or a list like `mon,wed,fri`.
+
 The OAuth client follows the MCP spec: discovery from the 401 challenge,
 dynamic registration with a loopback redirect on port 51733, PKCE.
 

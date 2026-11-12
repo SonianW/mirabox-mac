@@ -17,7 +17,7 @@ from StreamDock.InputTypes import EventType
 
 from .actions import run_action
 from .config import LCD_KEYS, Config, ConfigError, load_config
-from .events import load_events
+from .events import load_events, reminder_events
 from .render import blank_key, render_alarm_tiles, render_clock, render_key, split_tiles
 
 log = logging.getLogger(__name__)
@@ -167,10 +167,12 @@ class Deck:
             m = path.stat().st_mtime
         except FileNotFoundError:
             m = None
-        if m != self._events_mtime:
-            self._events_mtime = m
-            self._events = load_events(path)
-            log.info("loaded %d events from %s", len(self._events), path)
+        today = dt.date.today()
+        key = (m, today, id(self.config))
+        if key != self._events_mtime:
+            self._events_mtime = key
+            self._events = sorted(load_events(path) + reminder_events(self.config.alarm.reminders, today), key=lambda e: e.start)
+            log.info("loaded %d events (%d calendar, %d reminders)", len(self._events), len(self._events) - len(reminder_events(self.config.alarm.reminders, today)), len(reminder_events(self.config.alarm.reminders, today)))
 
     def _alarm_loop(self) -> None:
         phase = 0

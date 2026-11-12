@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -91,6 +92,7 @@ class AlarmConfig:
     enabled: bool = True
     wave_mcp_url: str | None = None  # MCP endpoint of the Wave calendar; None disables sync
     sync_minutes: int = 10
+    reminders: list[dict] = field(default_factory=list)  # [{"title": "...", "time": "HH:MM", "days": "daily|weekdays|mon,tue,..."}]
 
 
 @dataclass
@@ -232,7 +234,11 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> Config:
         enabled=bool(alarm_raw.get("enabled", True)),
         wave_mcp_url=alarm_raw.get("wave_mcp_url") or None,
         sync_minutes=max(1, int(alarm_raw.get("sync_minutes", 10))),
+        reminders=list(alarm_raw.get("reminders", [])),
     )
+    for i, r in enumerate(alarm.reminders):
+        if not isinstance(r, dict) or not r.get("title") or not re.fullmatch(r"\d{2}:\d{2}", str(r.get("time", ""))):
+            raise ConfigError(f"alarm.reminders[{i}] needs 'title' and 'time' as HH:MM")
     if not alarm.events_file.is_absolute():
         alarm.events_file = base / alarm.events_file
 
