@@ -45,6 +45,9 @@ class Deck:
         self._clock_thread.start()
         self.agenda_mode = False
         self.login_needed = False
+        self.login_in_progress = False
+        self._login_thread: threading.Thread | None = None
+        self._clock_redraw = False
         self.alarm_event = None  # Event currently alarming
         self._alarm_started = 0.0
         self._alarm_done: set[str] = set()  # event ids already alarmed or dismissed
@@ -154,13 +157,16 @@ class Deck:
                     log.info("idle for %ds, showing clock", cfg.idle_seconds)
                 now = dt.datetime.now()
                 colon_on = (now.second % 2 == 0) if cfg.blink else True
-                frame = (now.hour, now.minute, colon_on, now.day, cfg.gap, cfg.show_date, cfg.fg, cfg.bg, self.login_needed)
-                if frame == last_frame:
+                frame = (now.hour, now.minute, colon_on, now.day, cfg.gap, cfg.show_date, cfg.fg, cfg.bg, self.login_needed, self.login_in_progress)
+                if frame == last_frame and not self._clock_redraw:
                     continue
                 last_frame = frame
+                self._clock_redraw = False
                 try:
                     tiles = split_tiles(render_clock(now, colon_on, cfg), cfg.gap)
-                    if self.login_needed:
+                    if self.login_in_progress:
+                        tiles[-1] = login_hint_tile(in_progress=True)
+                    elif self.login_needed:
                         tiles[-1] = login_hint_tile()
                     self._send_tiles(dev, tiles)
                 except Exception:
@@ -271,6 +277,39 @@ class Deck:
             self._send_tiles(dev, render_agenda_tiles(items))
             log.info("showing agenda: %s", "; ".join(f"{t} {s}" for t, s, _ in items))
 
+    def start_login(self) -> None:
+        """Pressing the yellow key on the clock: run the Wave OAuth login in the browser, then sync."""
+        if self._login_thread is not None and self._login_thread.is_alive():
+            return
+        url = self.config.alarm.wave_mcp_url
+        if not url:
+            return
+
+        def work() -> None:
+            from .wave_oauth import OauthError, TokenStore, login
+            from .wave_sync import sync
+
+            log.info("login requested from the deck; opening browser")
+            with self.lock:
+                self.login_in_progress = True
+                self._clock_redraw = True
+            try:
+                login(url, TokenStore(), open_browser=True, timeout=600)
+                sync(url, self.config.alarm.events_file)
+                self.login_needed = False
+                log.info("login from deck succeeded")
+            except OauthError as e:
+                log.warning("login from deck failed: %s", e)
+            except Exception:
+                log.exception("login from deck failed")
+            finally:
+                with self.lock:
+                    self.login_in_progress = False
+                    self._clock_redraw = True
+
+        self._login_thread = threading.Thread(target=work, daemon=True)
+        self._login_thread.start()
+
     def wake(self) -> bool:
         """Leave clock mode. Returns True if the display was showing the clock."""
         with self.lock:
@@ -329,9 +368,12 @@ class Deck:
         try:
             if event.event_type != EventType.BUTTON or event.state != 1:
                 return
+            n = self._key_position(device, event.key)
+            if self.clock_mode and self.login_needed and n == 15:
+                self.start_login()
+                return
             if self.wake():
                 return  # the press that wakes the screen does nothing else
-            n = self._key_position(device, event.key)
             key = self.config.page(self.page_name).keys.get(n)
             log.info("key %d pressed (%s)", n, key.label if key else "unbound")
             if key is None:

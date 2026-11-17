@@ -263,12 +263,13 @@ def render_agenda_tiles(items: list[tuple[str, str, bool]], bg: str = "#101820",
     return tiles
 
 
-def login_hint_tile() -> Image.Image:
-    """Yellow key shown in the clock's bottom-right corner when the Wave token has expired."""
-    tile = _cell_tile("登录", "#ffd400", "#000000", _row_font(["登录"], 0.7))
+def login_hint_tile(in_progress: bool = False) -> Image.Image:
+    """Yellow key in the clock's bottom-right corner when the Wave token has expired; press it to log in."""
+    word = "登录中" if in_progress else "登录"
+    tile = _cell_tile(word, "#8ab4f8" if in_progress else "#ffd400", "#000000", _row_font([word], 0.7))
     d = ImageDraw.Draw(tile)
     f = _font(10, True)
-    msg = "Wave 过期"
+    msg = "看浏览器" if in_progress else "Wave 过期"
     bb = d.textbbox((0, 0), msg, font=f)
     d.text(((KEY_SIZE[0] - (bb[2] - bb[0])) / 2 - bb[0], 50 - bb[1]), msg, font=f, fill="#000000")
     return tile
