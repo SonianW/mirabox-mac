@@ -95,7 +95,7 @@ uv run mirabox-mac wave sync     # one-off pull
 uv run mirabox-mac alarm-test --seconds 90   # fake event to see the alarm
 ```
 
-When the token has expired the clock shows a yellow 登录 key in its bottom-right corner. Pressing it opens the browser login and syncs on success; `wave login` on the command line does the same.
+When the token has expired the clock shows a yellow 登录 key in its bottom-right corner. Pressing it opens the browser login; on success the callback tab is closed, the previously active app is brought back and the calendar is synced; `wave login` on the command line does the same.
 
 Fixed daily reminders that are not in the calendar go in `alarm.reminders`:
 `[{"title": "吃饭", "time": "11:50", "days": "weekdays"}]`, `days` is

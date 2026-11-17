@@ -26,6 +26,7 @@ import threading
 import time
 import urllib.error
 import urllib.parse
+import subprocess
 import urllib.request
 import webbrowser
 from dataclasses import dataclass
@@ -185,6 +186,49 @@ class TokenStore:
             p.unlink()
 
 
+def _osascript(src: str) -> str | None:
+    try:
+        r = subprocess.run(["osascript", "-e", src], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def _frontmost_app() -> str | None:
+    return _osascript('tell application "System Events" to get bundle identifier of first process whose frontmost is true')
+
+
+def _close_callback_tabs() -> None:
+    """Close browser tabs showing our loopback callback page (Chrome and Safari), ignoring errors."""
+    marker = f"localhost:{CALLBACK_PORT}"
+    _osascript(f'''
+        if application "Google Chrome" is running then
+            tell application "Google Chrome"
+                repeat with w in windows
+                    repeat with t in (tabs of w whose URL contains "{marker}")
+                        close t
+                    end repeat
+                end repeat
+            end tell
+        end if''')
+    _osascript(f'''
+        if application "Safari" is running then
+            tell application "Safari"
+                repeat with w in windows
+                    repeat with t in (tabs of w whose URL contains "{marker}")
+                        close t
+                    end repeat
+                end repeat
+            end tell
+        end if''')
+
+
+def _restore_front(bundle_id: str | None) -> None:
+    """Bring the app that was frontmost before the login back; this pushes the browser behind it."""
+    if bundle_id:
+        _osascript(f'tell application id "{bundle_id}" to activate')
+
+
 class _Callback(http.server.BaseHTTPRequestHandler):
     result: dict = {}
     done = threading.Event()
@@ -192,8 +236,8 @@ class _Callback(http.server.BaseHTTPRequestHandler):
     def do_GET(self):  # noqa: N802
         q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         _Callback.result = {k: v[0] for k, v in q.items()}
-        msg = "登录完成，可以关闭此页。" if "code" in q else f"授权失败：{q.get('error', ['?'])[0]}"
-        body = f"<html><body style='font-family:sans-serif'><h2>mirabox-mac</h2><p>{msg}</p></body></html>".encode()
+        msg = "登录完成，此页会自动关闭。" if "code" in q else f"授权失败：{q.get('error', ['?'])[0]}"
+        body = f"<html><body style='font-family:sans-serif'><h2>mirabox-mac</h2><p>{msg}</p><script>setTimeout(function(){{window.close()}},300)</script></body></html>".encode()
         self.send_response(200)
         self.send_header("content-type", "text/html; charset=utf-8")
         self.send_header("content-length", str(len(body)))
@@ -230,6 +274,7 @@ def login(mcp_url: str, store: TokenStore, open_browser: bool = True, timeout: i
     _Callback.done.clear()
     server = http.server.HTTPServer(("127.0.0.1", CALLBACK_PORT), _Callback)
     threading.Thread(target=server.serve_forever, daemon=True).start()
+    previous_app = _frontmost_app() if open_browser else None
     try:
         print(f"Open this URL to authorize {host}:\n{url}\n", flush=True)
         if open_browser:
@@ -239,6 +284,10 @@ def login(mcp_url: str, store: TokenStore, open_browser: bool = True, timeout: i
     finally:
         server.shutdown()
         server.server_close()
+    if open_browser:
+        time.sleep(0.6)  # let the browser render the callback page before closing it
+        _close_callback_tabs()
+        _restore_front(previous_app)
 
     r = _Callback.result
     if r.get("state") != state:
