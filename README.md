@@ -95,6 +95,8 @@ uv run mirabox-mac wave sync     # one-off pull
 uv run mirabox-mac alarm-test --seconds 90   # fake event to see the alarm
 ```
 
+When the token has expired the clock shows a yellow 登录 key in its bottom-right corner; run `wave login` again.
+
 Fixed daily reminders that are not in the calendar go in `alarm.reminders`:
 `[{"title": "吃饭", "time": "11:50", "days": "weekdays"}]`, `days` is
 `daily`, `weekdays` or a list like `mon,wed,fri`.

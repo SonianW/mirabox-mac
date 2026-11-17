@@ -18,7 +18,7 @@ from StreamDock.InputTypes import EventType
 from .actions import run_action
 from .config import LCD_KEYS, Config, ConfigError, load_config
 from .events import load_events, reminder_events
-from .render import blank_key, render_agenda_tiles, render_alarm_tiles, render_clock, render_key, split_tiles
+from .render import blank_key, login_hint_tile, render_agenda_tiles, render_alarm_tiles, render_clock, render_key, split_tiles
 
 log = logging.getLogger(__name__)
 
@@ -44,6 +44,7 @@ class Deck:
         self._clock_thread = threading.Thread(target=self._clock_loop, daemon=True)
         self._clock_thread.start()
         self.agenda_mode = False
+        self.login_needed = False
         self.alarm_event = None  # Event currently alarming
         self._alarm_started = 0.0
         self._alarm_done: set[str] = set()  # event ids already alarmed or dismissed
@@ -153,12 +154,15 @@ class Deck:
                     log.info("idle for %ds, showing clock", cfg.idle_seconds)
                 now = dt.datetime.now()
                 colon_on = (now.second % 2 == 0) if cfg.blink else True
-                frame = (now.hour, now.minute, colon_on, now.day, cfg.gap, cfg.show_date, cfg.fg, cfg.bg)
+                frame = (now.hour, now.minute, colon_on, now.day, cfg.gap, cfg.show_date, cfg.fg, cfg.bg, self.login_needed)
                 if frame == last_frame:
                     continue
                 last_frame = frame
                 try:
-                    self._send_tiles(dev, split_tiles(render_clock(now, colon_on, cfg), cfg.gap))
+                    tiles = split_tiles(render_clock(now, colon_on, cfg), cfg.gap)
+                    if self.login_needed:
+                        tiles[-1] = login_hint_tile()
+                    self._send_tiles(dev, tiles)
                 except Exception:
                     log.exception("clock frame failed")
 
@@ -226,7 +230,9 @@ class Deck:
                 try:
                     sync(cfg.wave_mcp_url, cfg.events_file)
                     warned = False
+                    self.login_needed = False
                 except OauthError as e:
+                    self.login_needed = True
                     if not warned:
                         log.warning("calendar sync needs login: %s", e)
                         warned = True
