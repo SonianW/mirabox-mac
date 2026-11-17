@@ -96,6 +96,12 @@ class AlarmConfig:
 
 
 @dataclass
+class LoginConfig:
+    hb_api_base: str | None = None  # office-mcp API on the dev box, e.g. http://127.0.0.1:<tunnel port>/api/crafting-table
+    min_hours: float = 0  # also re-login tokens with less than this many hours left
+
+
+@dataclass
 class Config:
     path: Path
     brightness: int
@@ -104,6 +110,7 @@ class Config:
     pages: dict[str, Page]
     clock: ClockConfig = field(default_factory=ClockConfig)
     alarm: AlarmConfig = field(default_factory=AlarmConfig)
+    login: LoginConfig = field(default_factory=LoginConfig)
 
     def page(self, name: str) -> Page:
         try:
@@ -242,4 +249,9 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> Config:
     if not alarm.events_file.is_absolute():
         alarm.events_file = base / alarm.events_file
 
-    return Config(path=path, brightness=brightness, led=led_t, default_page=default_page, pages=pages, clock=clock, alarm=alarm)
+    login_raw = raw.get("login") or {}
+    if not isinstance(login_raw, dict):
+        raise ConfigError("'login' must be an object")
+    login = LoginConfig(hb_api_base=login_raw.get("hb_api_base") or None, min_hours=float(login_raw.get("min_hours", 0)))
+
+    return Config(path=path, brightness=brightness, led=led_t, default_page=default_page, pages=pages, clock=clock, alarm=alarm, login=login)

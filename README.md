@@ -104,6 +104,24 @@ Fixed daily reminders that are not in the calendar go in `alarm.reminders`:
 The OAuth client follows the MCP spec: discovery from the 401 challenge,
 dynamic registration with a loopback redirect on port 51733, PKCE.
 
+## One login for everything
+
+`mirabox-mac login` (or the `scripts/office-login` wrapper, symlink it into
+`~/.local/bin`) checks the local Wave token and, when `login.hb_api_base`
+points at the dev box's office-mcp API through an SSH tunnel, the dev box's
+gateway tokens too. Only missing or expiring ones get a browser login; the dev
+box's callback page chains its gateways itself. Afterwards the callback tabs
+are closed and the previously active app is brought back. The yellow key on
+the clock runs the same routine, and it also appears when a dev box token has
+expired.
+
+```bash
+office-login --status        # table of every token and hours left
+office-login                 # log in where needed
+office-login --force         # re-login everything
+office-login --min-hours 36  # also renew tokens expiring within 36h
+```
+
 ## Layout
 
 ```
@@ -115,6 +133,7 @@ src/mirabox_mac/
   events.py   events file loader
   wave_oauth.py  OAuth 2.1 client + token store
   wave_sync.py   MCP client, calendar → events file
+  office_login.py  local + dev box token check and login
   cli.py      run | devices | check | preview | wave | alarm-test
 vendor/StreamDock-Device-SDK   official SDK submodule (Python-SDK installed editable)
 launchd/, scripts/             login agent

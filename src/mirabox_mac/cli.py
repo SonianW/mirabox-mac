@@ -136,6 +136,29 @@ def cmd_wave(args) -> int:
     return 2
 
 
+def cmd_login(args) -> int:
+    """Check every token (local Wave + dev box gateways) and log in where needed."""
+    from .office_login import hb_states, local_state, login_all
+
+    cfg = load_config(Path(args.config).expanduser())
+    url, base = cfg.alarm.wave_mcp_url, cfg.login.hb_api_base
+    states = []
+    if url:
+        states.append(local_state(url))
+    if base:
+        try:
+            states += hb_states(base)
+        except Exception as e:
+            print(f"dev box unreachable: {e}", file=sys.stderr)
+    for st in states:
+        print(f"{st.name:14s} {st.host:28s} {'ok' if st.ok else 'EXPIRED':8s} {st.remaining_s / 3600:6.1f}h")
+    if args.status:
+        return 0 if all(s.ok for s in states) else 1
+    done = login_all(url, base, args.min_hours if args.min_hours is not None else cfg.login.min_hours, open_browser=not args.no_browser, force=args.force)
+    print("logged in: " + (", ".join(done) if done else "nothing needed"))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="mirabox-mac", description="Drive a Mirabox Stream Dock M18 on macOS from a JSON key map.")
     p.add_argument("-c", "--config", default=str(DEFAULT_CONFIG_PATH), help=f"config path (default {DEFAULT_CONFIG_PATH})")
@@ -155,6 +178,13 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("preview", help="render each page to a PNG contact sheet")
     s.add_argument("--out", default="/tmp/mirabox-mac-preview")
     s.set_defaults(fn=cmd_preview)
+
+    s = sub.add_parser("login", help="check local Wave token and dev box gateway tokens, log in where needed")
+    s.add_argument("--status", action="store_true", help="only print token states")
+    s.add_argument("--force", action="store_true", help="re-login everything")
+    s.add_argument("--min-hours", type=float, default=None, help="also re-login tokens with less than this many hours left")
+    s.add_argument("--no-browser", action="store_true")
+    s.set_defaults(fn=cmd_login)
 
     s = sub.add_parser("wave", help="Wave calendar: login | status | sync | forget")
     s.add_argument("action", choices=["login", "status", "sync", "forget"])

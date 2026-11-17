@@ -14,6 +14,7 @@
       16
     ]
   },
+  "login": {"hb_api_base": "http://127.0.0.1:<tunnel-port>/api/crafting-table", "min_hours": 0},
   "alarm": {
     "lead_seconds": 60,
     "max_seconds": 600,

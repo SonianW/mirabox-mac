@@ -226,6 +226,7 @@ class Deck:
             time.sleep(max(0.0, 1.0 / cfg.fps - 0.2))
 
     def _sync_loop(self) -> None:
+        from .office_login import needs_login
         from .wave_oauth import OauthError
         from .wave_sync import sync
 
@@ -236,7 +237,9 @@ class Deck:
                 try:
                     sync(cfg.wave_mcp_url, cfg.events_file)
                     warned = False
-                    self.login_needed = False
+                    self.login_needed = needs_login(None, self.config.login.hb_api_base)
+                    if self.login_needed:
+                        log.warning("dev box MCP tokens need login")
                 except OauthError as e:
                     self.login_needed = True
                     if not warned:
@@ -286,7 +289,8 @@ class Deck:
             return
 
         def work() -> None:
-            from .wave_oauth import OauthError, TokenStore, login
+            from .office_login import login_all
+            from .wave_oauth import OauthError
             from .wave_sync import sync
 
             log.info("login requested from the deck; opening browser")
@@ -294,10 +298,10 @@ class Deck:
                 self.login_in_progress = True
                 self._clock_redraw = True
             try:
-                login(url, TokenStore(), open_browser=True, timeout=600)
+                done = login_all(url, self.config.login.hb_api_base, self.config.login.min_hours, open_browser=True)
                 sync(url, self.config.alarm.events_file)
                 self.login_needed = False
-                log.info("login from deck succeeded")
+                log.info("login from deck succeeded: %s", ", ".join(done) or "nothing needed")
             except OauthError as e:
                 log.warning("login from deck failed: %s", e)
             except Exception:

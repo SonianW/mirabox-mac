@@ -200,12 +200,12 @@ def _frontmost_app() -> str | None:
 
 def _close_callback_tabs() -> None:
     """Close browser tabs showing our loopback callback page (Chrome and Safari), ignoring errors."""
-    marker = f"localhost:{CALLBACK_PORT}"
+    marker = "/oauth/callback"  # matches both our loopback callback and the dev box's
     _osascript(f'''
         if application "Google Chrome" is running then
             tell application "Google Chrome"
                 repeat with w in windows
-                    repeat with t in (tabs of w whose URL contains "{marker}")
+                    repeat with t in (tabs of w whose URL contains "{marker}" or URL contains "localhost:{CALLBACK_PORT}")
                         close t
                     end repeat
                 end repeat
@@ -215,7 +215,7 @@ def _close_callback_tabs() -> None:
         if application "Safari" is running then
             tell application "Safari"
                 repeat with w in windows
-                    repeat with t in (tabs of w whose URL contains "{marker}")
+                    repeat with t in (tabs of w whose URL contains "{marker}" or URL contains "localhost:{CALLBACK_PORT}")
                         close t
                     end repeat
                 end repeat
@@ -249,7 +249,7 @@ class _Callback(http.server.BaseHTTPRequestHandler):
         pass
 
 
-def login(mcp_url: str, store: TokenStore, open_browser: bool = True, timeout: int = 900) -> Token:
+def login(mcp_url: str, store: TokenStore, open_browser: bool = True, timeout: int = 900, tidy_browser: bool = True) -> Token:
     """Interactive login: prints the authorization URL, waits for the loopback callback, stores the token."""
     host = host_of(mcp_url)
     ep = discover(mcp_url)
@@ -284,7 +284,7 @@ def login(mcp_url: str, store: TokenStore, open_browser: bool = True, timeout: i
     finally:
         server.shutdown()
         server.server_close()
-    if open_browser:
+    if open_browser and tidy_browser:
         time.sleep(0.6)  # let the browser render the callback page before closing it
         _close_callback_tabs()
         _restore_front(previous_app)
