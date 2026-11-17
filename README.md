@@ -120,6 +120,7 @@ office-login --status        # table of every token and hours left
 office-login                 # log in where needed
 office-login --force         # re-login everything
 office-login --min-hours 36  # also renew tokens expiring within 36h
+office-login --force --only hb   # re-login just the dev box gateways
 ```
 
 ## Layout

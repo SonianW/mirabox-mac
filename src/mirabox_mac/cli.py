@@ -154,7 +154,7 @@ def cmd_login(args) -> int:
         print(f"{st.name:14s} {st.host:28s} {'ok' if st.ok else 'EXPIRED':8s} {st.remaining_s / 3600:6.1f}h")
     if args.status:
         return 0 if all(s.ok for s in states) else 1
-    done = login_all(url, base, args.min_hours if args.min_hours is not None else cfg.login.min_hours, open_browser=not args.no_browser, force=args.force)
+    done = login_all(url, base, args.min_hours if args.min_hours is not None else cfg.login.min_hours, open_browser=not args.no_browser, force=args.force, only=args.only)
     print("logged in: " + (", ".join(done) if done else "nothing needed"))
     return 0
 
@@ -183,6 +183,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--status", action="store_true", help="only print token states")
     s.add_argument("--force", action="store_true", help="re-login everything")
     s.add_argument("--min-hours", type=float, default=None, help="also re-login tokens with less than this many hours left")
+    s.add_argument("--only", choices=["local", "hb"], help="limit to the local Wave token or the dev box tokens")
     s.add_argument("--no-browser", action="store_true")
     s.set_defaults(fn=cmd_login)
 

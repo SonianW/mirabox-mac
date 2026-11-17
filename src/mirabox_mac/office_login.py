@@ -77,19 +77,19 @@ def hb_login(api_base: str, target: str, open_browser: bool = True, timeout: int
     raise OauthError("dev box login timed out")
 
 
-def login_all(mcp_url: str | None, api_base: str | None, min_hours: float = 0, open_browser: bool = True, force: bool = False) -> list[str]:
+def login_all(mcp_url: str | None, api_base: str | None, min_hours: float = 0, open_browser: bool = True, force: bool = False, only: str | None = None) -> list[str]:
     """Log in wherever needed. Returns the names that were (re)logged."""
     done: list[str] = []
     previous = _frontmost_app() if open_browser else None
     threshold = min_hours * 3600
     try:
-        if mcp_url:
+        if mcp_url and only in (None, "local"):
             st = local_state(mcp_url)
             if force or st.remaining_s <= threshold:
                 log.info("local Wave token: %.1fh left, logging in", st.remaining_s / 3600)
                 login(mcp_url, TokenStore(), open_browser=open_browser, tidy_browser=False)
                 done.append(st.name)
-        if api_base:
+        if api_base and only in (None, "hb"):
             try:
                 states = hb_states(api_base)
             except (urllib.error.URLError, OSError) as e:
